@@ -905,7 +905,7 @@ class _ProductCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),P
+          ),
         ],
       ),
     );
