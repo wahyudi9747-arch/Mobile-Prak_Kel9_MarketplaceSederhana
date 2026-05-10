@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const MobilePrakApp()); // Project name: mobile_prak
+  runApp(const MobilePrakApp());
 }
 
 class MobilePrakApp extends StatelessWidget {
@@ -24,7 +27,8 @@ class MobilePrakApp extends StatelessWidget {
   }
 }
 
-// Helper format Rupiah
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
 String formatRupiah(double harga) {
   final formatted = harga
       .toStringAsFixed(0)
@@ -32,10 +36,15 @@ String formatRupiah(double harga) {
   return 'Rp $formatted';
 }
 
-// Data Model
+// ─── Model ────────────────────────────────────────────────────────────────────
+
 class Product {
-  final String id, name, description, category, image;
+  final String id;
+  final String name;
+  final String description;
+  final String category;
   final double price;
+  final String image;
 
   Product({
     required this.id,
@@ -43,9 +52,74 @@ class Product {
     required this.description,
     required this.price,
     required this.category,
-    required this.image,
+    this.image = '',
   });
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id']?.toString() ?? '',
+      name: json['name'] ?? '',
+      description: json['description'] ?? '',
+      price: (json['price'] as num).toDouble(),
+      category: json['category'] ?? '',
+      image: json['image'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'price': price,
+        'category': category,
+        'image': image,
+      };
 }
+
+// ─── Product Service (MockAPI) ────────────────────────────────────────────────
+
+class ProductService {
+  static const String _url =
+      'https://6a0043ff2b7ab34960302ef8.mockapi.io/products/products';
+
+  static Future<List<Product>> fetchProducts() async {
+    final response = await http
+        .get(Uri.parse(_url))
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => Product.fromJson(json)).toList();
+    } else {
+      throw Exception('Gagal memuat produk (${response.statusCode})');
+    }
+  }
+}
+
+// ─── Cart Storage (SharedPreferences) ────────────────────────────────────────
+
+class CartStorage {
+  static const String _key = 'cart_items';
+
+  static Future<void> saveCart(List<Product> cart) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = cart.map((p) => jsonEncode(p.toJson())).toList();
+    await prefs.setStringList(_key, jsonList);
+  }
+
+  static Future<List<Product>> loadCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonList = prefs.getStringList(_key) ?? [];
+    return jsonList.map((s) => Product.fromJson(jsonDecode(s))).toList();
+  }
+
+  static Future<void> clearCart() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
+}
+
+// ─── Home Page ────────────────────────────────────────────────────────────────
 
 class MarketplaceHome extends StatefulWidget {
   const MarketplaceHome({super.key});
@@ -55,64 +129,57 @@ class MarketplaceHome extends StatefulWidget {
 }
 
 class _MarketplaceHomeState extends State<MarketplaceHome> {
-  final List<Product> products = [
-    Product(
-      id: '1',
-      name: 'iPhone 15 Pro',
-      description: 'Desain titanium dengan chip A17 Pro, kamera utama 48MP.',
-      price: 14999000,
-      category: 'Smartphone',
-      image: 'https://down-id.img.susercontent.com/file/id-11134207-7ra0j-mdrax83jhemw05',
-    ),
-    Product(
-      id: '2',
-      name: 'MacBook Air M3',
-      description: 'Tipis dan cepat dengan chip M3. Layar 13 inci, RAM 8GB, SSD 256GB.',
-      price: 21999000,
-      category: 'Laptop',
-      image: 'https://ibox.co.id/_next/image?url=https%3A%2F%2Fcdnpro.eraspace.com%2Fmedia%2Fcatalog%2Fproduct%2Fa%2Fp%2Fapple_macbook_air_13_inci_m3_2024_space_gray_1_3_1.jpg&w=1920&q=45',
-    ),
-    Product(
-      id: '3',
-      name: 'iPad Pro 12.9"',
-      description: 'Performa luar biasa dengan layar Liquid Retina XDR.',
-      price: 18999000,
-      category: 'Tablet',
-      image: 'https://www.static-src.com/wcsstore/Indraprastha/images/catalog/full//95/MTA-55432616/apple_ipad_pro_5th_gen_12-9-inch_full01_szxq2wt1.jpg',
-    ),
-    Product(
-      id: '4',
-      name: 'Apple Watch S9',
-      description: 'Lebih cerdas, lebih cerah, dan lebih tangguh dari sebelumnya.',
-      price: 6999000,
-      category: 'Smartwatch',
-      image: 'https://ibox.co.id/_next/image?url=https%3A%2F%2Fcdnpro.eraspace.com%2Fmedia%2Fcatalog%2Fproduct%2Fa%2Fp%2Fapple_watch_series_9_41mm_gps_pink_aluminium_case_with_light_pink_sport_band_1.jpg&w=1920&q=45',
-    ),
-    Product(
-      id: '5',
-      name: 'AirPods Pro 2',
-      description: 'Peredam kebisingan aktif kelas pro dan spatial audio.',
-      price: 4299000,
-      category: 'TWS',
-      image: 'https://macstore.id/wp-content/uploads/2022/10/MQD83.jpeg',
-    ),
-    Product(
-      id: '6',
-      name: 'Sony WH-1000XM5',
-      description: 'Headphone dengan noise cancelling terdepan di industri.',
-      price: 5999000,
-      category: 'TWS',
-      image: 'https://www.sony.co.id/image/5d02da5df552836db894cead8a68f5f3?fmt=pjpeg&wid=330&bgcolor=FFFFFF&bgc=FFFFFF',
-    ),
-  ];
-
+  List<Product> _allProducts = [];
   List<Product> cart = [];
+  bool _isLoading = true;
+  String? _errorMessage;
   String selectedCategory = 'Semua';
   String searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+
+  void _unfocusSearch() => _searchFocus.unfocus();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCart();
+    _loadProducts();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCart() async {
+    final savedCart = await CartStorage.loadCart();
+    setState(() => cart = savedCart);
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final products = await ProductService.fetchProducts();
+      setState(() {
+        _allProducts = products;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Gagal memuat produk.\nCek koneksi internet kamu.';
+        _isLoading = false;
+      });
+    }
+  }
 
   List<Product> get filteredProducts {
-    return products.where((p) {
+    return _allProducts.where((p) {
       final matchesCategory =
           selectedCategory == 'Semua' || p.category == selectedCategory;
       final matchesSearch =
@@ -121,8 +188,14 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
     }).toList();
   }
 
+  List<String> get categories {
+    final cats = _allProducts.map((p) => p.category).toSet().toList()..sort();
+    return ['Semua', ...cats];
+  }
+
   void tambahKeKeranjang(Product product) {
     setState(() => cart.add(product));
+    CartStorage.saveCart(cart); // simpan ke SharedPreferences
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${product.name} ditambahkan ke keranjang!'),
@@ -130,10 +203,6 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
         duration: const Duration(seconds: 1),
       ),
     );
-  }
-
-  void hapusDariKeranjang(int index) {
-    setState(() => cart.removeAt(index));
   }
 
   @override
@@ -181,15 +250,20 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
+      body: GestureDetector(
+        onTap: _unfocusSearch, // tap di mana saja = tutup keyboard
+        behavior: HitTestBehavior.translucent,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: _searchController,
+              focusNode: _searchFocus,
               onChanged: (val) => setState(() => searchQuery = val),
+              onSubmitted: (_) => _unfocusSearch(), // tekan Enter = tutup keyboard
+              textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: 'Cari produk',
                 prefixIcon: const Icon(LucideIcons.search, size: 18),
@@ -202,39 +276,30 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
               ),
             ),
           ),
-
-          // Kategori
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                'Semua',
-                'Smartphone',
-                'Laptop',
-                'Tablet',
-                'Smartwatch',
-                'TWS',
-              ].map((cat) {
-                bool isSelected = selectedCategory == cat;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    onSelected: (val) =>
-                        setState(() => selectedCategory = cat),
-                    selectedColor: Colors.blue,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87,
+          if (!_isLoading && _errorMessage == null)
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: categories.map((cat) {
+                  final isSelected = selectedCategory == cat;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(cat),
+                      selected: isSelected,
+                      onSelected: (_) =>
+                          setState(() => selectedCategory = cat),
+                      selectedColor: Colors.blue,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : Colors.black87,
+                      ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 24, 16, 12),
             child: Text(
@@ -242,39 +307,80 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
-
-          // Grid Produk
-          Expanded(
-            child: filteredProducts.isEmpty
-                ? const Center(child: Text("Produk tidak ditemukan"))
-                : GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.7,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      return GestureDetector(
-                        onTap: () => _tampilkanDetailProduk(context, product),
-                        child: _ProductCard(
-                          product: product,
-                          onAdd: () => tambahKeKeranjang(product),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _buildBody()),
         ],
+      ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Memuat produk...', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(LucideIcons.wifiOff, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(_errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadProducts,
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredProducts.isEmpty) {
+      return const Center(child: Text('Produk tidak ditemukan'));
+    }
+
+    // Pull-to-refresh: tarik layar ke bawah = fetch ulang dari MockAPI
+    return RefreshIndicator(
+      onRefresh: _loadProducts,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.7,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: filteredProducts.length,
+        itemBuilder: (context, index) {
+          final product = filteredProducts[index];
+          return GestureDetector(
+            onTap: () => _tampilkanDetailProduk(context, product),
+            child: _ProductCard(
+              product: product,
+              onAdd: () => tambahKeKeranjang(product),
+            ),
+          );
+        },
       ),
     );
   }
 
   void _tampilkanDetailProduk(BuildContext context, Product product) {
+    _unfocusSearch(); // tutup keyboard sebelum buka modal
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -291,43 +397,37 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(20),
-              child: Image.network(
-                product.image,
-                height: 250,
-                fit: BoxFit.cover,
-              ),
+              child: product.image.isNotEmpty
+                  ? Image.network(
+                      product.image,
+                      height: 220,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                    )
+                  : _imagePlaceholder(),
             ),
             const SizedBox(height: 20),
-            Text(
-              product.category.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.blueAccent,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
-            ),
-            Text(
-              product.name,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            Text(product.category.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                )),
+            Text(product.name,
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(
-              formatRupiah(product.price),
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                color: Colors.blueAccent,
-              ),
-            ),
+            Text(formatRupiah(product.price),
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.blueAccent,
+                )),
             const SizedBox(height: 20),
-            const Text(
-              'Deskripsi',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Text(
-              product.description,
-              style: const TextStyle(color: Colors.grey),
-            ),
+            const Text('Deskripsi',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(product.description,
+                style: const TextStyle(color: Colors.grey)),
             const SizedBox(height: 40),
             ElevatedButton(
               onPressed: () {
@@ -342,10 +442,8 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                   borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              child: const Text(
-                'Tambah ke Keranjang',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              child: const Text('Tambah ke Keranjang',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -353,8 +451,18 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
     );
   }
 
+  Widget _imagePlaceholder() {
+    return Container(
+      height: 140,
+      color: Colors.grey[100],
+      child: const Center(
+        child: Icon(LucideIcons.package, size: 48, color: Colors.grey),
+      ),
+    );
+  }
+
   void _tampilkanKeranjang(BuildContext context) {
-    // FIX: simpan rootContext (Scaffold) sebelum masuk modal
+    _unfocusSearch(); // tutup keyboard sebelum buka modal
     final rootContext = context;
 
     showModalBottomSheet(
@@ -369,6 +477,7 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
           void hapusItem(int index) {
             setModalState(() => cart.removeAt(index));
             setState(() {});
+            CartStorage.saveCart(cart); // simpan setelah hapus
           }
 
           double total = cart.fold(0.0, (sum, p) => sum + p.price);
@@ -381,44 +490,45 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
             builder: (_, scrollController) => Column(
               children: [
                 const SizedBox(height: 16),
-                const Text(
-                  'Keranjang Belanja',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                const Text('Keranjang Belanja',
+                    style: TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
                 const Divider(),
                 Expanded(
                   child: cart.isEmpty
-                      ? const Center(child: Text("Keranjang masih kosong"))
+                      ? const Center(child: Text('Keranjang masih kosong'))
                       : ListView.builder(
                           controller: scrollController,
                           itemCount: cart.length,
-                          itemBuilder: (context, index) => ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                cart[index].image,
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
+                          itemBuilder: (context, index) {
+                            final item = cart[index];
+                            return ListTile(
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: item.image.isNotEmpty
+                                    ? Image.network(
+                                        item.image,
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) =>
+                                            _miniPlaceholder(),
+                                      )
+                                    : _miniPlaceholder(),
                               ),
-                            ),
-                            title: Text(
-                              cart[index].name,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              formatRupiah(cart[index].price),
-                              style: const TextStyle(color: Colors.blueAccent),
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(
-                                LucideIcons.trash2,
-                                size: 18,
-                                color: Colors.red,
+                              title: Text(item.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600)),
+                              subtitle: Text(formatRupiah(item.price),
+                                  style: const TextStyle(
+                                      color: Colors.blueAccent)),
+                              trailing: IconButton(
+                                icon: const Icon(LucideIcons.trash2,
+                                    size: 18, color: Colors.red),
+                                onPressed: () => hapusItem(index),
                               ),
-                              onPressed: () => hapusItem(index),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                 ),
                 if (cart.isNotEmpty) ...[
@@ -428,12 +538,12 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Total', style: TextStyle(fontSize: 18)),
-                        Text(
-                          formatRupiah(total),
-                          style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
+                        const Text('Total',
+                            style: TextStyle(fontSize: 18)),
+                        Text(formatRupiah(total),
+                            style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -441,11 +551,11 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                     child: ElevatedButton(
                       onPressed: () {
-                        // Snapshot cart sebelum modal ditutup
                         final snapshot = List<Product>.from(cart);
                         final totalSnapshot = total;
                         Navigator.pop(context);
-                        _tampilkanRingkasan(rootContext, snapshot, totalSnapshot);
+                        _tampilkanRingkasan(
+                            rootContext, snapshot, totalSnapshot);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueAccent,
@@ -455,18 +565,26 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: const Text(
-                        'Checkout',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      child: const Text('Checkout',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ),
-                ]
+                ],
               ],
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _miniPlaceholder() {
+    return Container(
+      width: 48,
+      height: 48,
+      color: Colors.grey[100],
+      child:
+          const Icon(LucideIcons.package, size: 20, color: Colors.grey),
     );
   }
 
@@ -478,11 +596,8 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
       jumlah[p.id] = (jumlah[p.id] ?? 0) + 1;
       produkMap[p.id] = p;
     }
-    final double subtotal = totalBersih;
     final double ongkir = 36780;
-    final double total = subtotal + ongkir;
-
-    // FIX: simpan rootContext sebelum masuk modal ringkasan
+    final double total = totalBersih + ongkir;
     final rootContext = context;
 
     showModalBottomSheet(
@@ -512,10 +627,9 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Ringkasan Pesanan',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                const Text('Ringkasan Pesanan',
+                    style: TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
                 GestureDetector(
                   onTap: () => Navigator.pop(ctx),
                   child: Icon(Icons.close, color: Colors.grey[500]),
@@ -523,7 +637,6 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
               ],
             ),
             const SizedBox(height: 20),
-
             ...jumlah.entries.map((e) {
               final p = produkMap[e.key]!;
               return Padding(
@@ -534,14 +647,13 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                     Text('${e.value}x ${p.name}',
                         style: const TextStyle(fontSize: 14)),
                     Text(formatRupiah(p.price * e.value),
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               );
             }),
-
             const SizedBox(height: 16),
-
             _RingkasanInfoRow(
               icon: Icons.location_on_outlined,
               label: 'ALAMAT PENGIRIMAN',
@@ -553,9 +665,7 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
               label: 'METODE PEMBAYARAN',
               value: 'Bank Mandiri - 873298610372',
             ),
-
             const SizedBox(height: 20),
-
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -565,10 +675,13 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
               ),
               child: Column(
                 children: [
-                  _HargaRow(label: 'Subtotal', nilai: formatRupiah(subtotal)),
+                  _HargaRow(
+                      label: 'Subtotal',
+                      nilai: formatRupiah(totalBersih)),
                   const SizedBox(height: 8),
                   _HargaRow(
-                      label: 'Biaya Pengiriman', nilai: formatRupiah(ongkir)),
+                      label: 'Biaya Pengiriman',
+                      nilai: formatRupiah(ongkir)),
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 10),
                     child: Divider(height: 1),
@@ -578,39 +691,33 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
                     children: [
                       const Text('Total',
                           style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text(
-                        formatRupiah(total),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent,
-                        ),
-                      ),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
+                      Text(formatRupiah(total),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          )),
                     ],
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // 1. Tutup modal ringkasan
                   Navigator.pop(ctx);
-                  // 2. Kosongkan keranjang
                   setState(() => cart.clear());
-                  // 3. Tampilkan sukses pakai rootContext
+                  CartStorage.clearCart(); // hapus dari SharedPreferences
                   _tampilkanSukses(rootContext);
                 },
                 icon: const Icon(Icons.shield_outlined, size: 18),
-                label: const Text(
-                  'Bayar Sekarang',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+                label: const Text('Bayar Sekarang',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blueAccent,
                   foregroundColor: Colors.white,
@@ -650,10 +757,9 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
             const Icon(LucideIcons.checkCircle2,
                 size: 80, color: Colors.blueAccent),
             const SizedBox(height: 24),
-            const Text(
-              'Pesanan Dikonfirmasi!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            const Text('Pesanan Dikonfirmasi!',
+                style: TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             const Text(
               'Produk Anda akan segera disiapkan oleh penjual!',
@@ -671,7 +777,8 @@ class _MarketplaceHomeState extends State<MarketplaceHome> {
   }
 }
 
-// ── Widget helper Ringkasan ────────────────────────────────────────────────
+// ─── Widget Helper ────────────────────────────────────────────────────────────
+
 class _RingkasanInfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -722,14 +829,16 @@ class _HargaRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+        Text(label,
+            style: TextStyle(color: Colors.grey[600], fontSize: 14)),
         Text(nilai, style: const TextStyle(fontSize: 14)),
       ],
     );
   }
 }
 
-// ── Product Card ───────────────────────────────────────────────────────────
+// ─── Product Card (StatelessWidget) ──────────────────────────────────────────
+
 class _ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onAdd;
@@ -750,11 +859,14 @@ class _ProductCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(20)),
-              child: Image.network(
-                product.image,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              child: product.image.isNotEmpty
+                  ? Image.network(
+                      product.image,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _placeholder(),
+                    )
+                  : _placeholder(),
             ),
           ),
           Padding(
@@ -788,12 +900,22 @@ class _ProductCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Tambah', style: TextStyle(fontSize: 12)),
+                  child: const Text('Tambah',
+                      style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
-          ),
+          ),P
         ],
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: Colors.grey[100],
+      child: const Center(
+        child: Icon(LucideIcons.package, size: 40, color: Colors.grey),
       ),
     );
   }
